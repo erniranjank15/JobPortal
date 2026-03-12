@@ -1,0 +1,8 @@
+cloudinary
+cookie-parser
+cors
+dotenv
+express
+mongoose
+multer
+nodemon
