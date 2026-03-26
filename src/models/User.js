@@ -31,10 +31,9 @@ const userSchema = new mongoose.Schema({
     type:String,
 },
 
-//  isBloked:{
-//     type:Boolean,
-//     default:false
-//  },
+resumePublicId: {
+    type: String
+},
 
 
 },{

@@ -1,94 +1,109 @@
+
 import {User} from "../models/User.js"
 import bcrypt from "bcrypt"
 import jwt from 'jsonwebtoken'
 import {asyncHandler} from "../utils/asyncHandler.js"
 import ApiError from "../utils/ApiError.js"
 import ApiResponse from "../utils/ApiResponse.js"
-import {uploadOnCloudinary} from "../utils/cloudinary.js" 
+import { uploadOnCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js" 
 
 
 
 
 //Register User
+const registerUser = asyncHandler(async (req, res) => {
 
-const registerUser = asyncHandler(async(req,res)=>{
+    const { name, email, password, role } = req.body;
 
 
-    const {name, email, password, role, resume} = req.body
-    //console.log("email: ", email);
-      console.log("req-body: ",req.body)
-    if( [name, email, password, role, resume].some((field) => field?.trim() === "")){
+    // Check empty fields
+    if ([name, email, password, role].some((field) => !field || field.trim() === "")) {
         throw new ApiError(400, "All fields are required");
-        
+    }
+
+    // Check existing user
+    const existingUser = await User.findOne({ email });
+
+    if (existingUser) {
+        throw new ApiError(409, "User with this email already exists");
     }
 
 
-    const existingUser = await User.findOne({
-           $or: [{ email },{role}]
-    })
-
-
-    if(existingUser){
-        throw new ApiError(409, "User with email or role already exists");
-    }
-
-
-    if(password.length < 10){
-        throw new ApiError(400, "Password must be at least 10 characters long")
-    }
+    //Check Admin registration only one admin can be register
     
-    const salt = await bcrypt.genSalt(10)
-    const hashedPassword = await bcrypt.hash(password, salt)
+    const isAdminExists = await User.findOne({ role: "admin" });
 
+    if (role === "admin" && isAdminExists) {
+        throw new ApiError(400, "An admin user already exists");
+    }
 
+    
+    // Password validation
+    if (password.length < 10) {
+        throw new ApiError(400, "Password must be at most 10 characters long");
+    }
 
+    // Role validation
     if (!["applicant", "recruiter", "admin"].includes(role)) {
-        throw new ApiError(400, "Invalid role specified. Allowed roles are 'jobseekar', 'recruiter', 'admin'");
+        throw new ApiError(
+            400,
+            "Invalid role specified. Allowed roles: applicant, recruiter, admin"
+        );
     }
 
-
-
-      const resumeLocalPath = req.files?.resume[0]?.path;
-    
-      console.log("req-files: ",req.files)
-
-     if (!resumeLocalPath) {
-        throw new ApiError(400, "Resume file is required")
-    }
-
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
     
-    const resumeUrl = await uploadOnCloudinary(resumeLocalPath)
 
 
-      if (!resumeUrl) {
-        throw new ApiError(400, "Resume file is required")
+
+  // Resume upload
+
+  // Resume upload only for applicant
+// Resume Upload
+  let resumeUrl = "";
+  let resumePublicId = null;
+
+    if (role === "applicant") {
+    const resumeLocalPath = req.files?.resume?.[0]?.path;
+
+    if (!resumeLocalPath) {
+      throw new ApiError(400, "Resume is required");
     }
 
+    const upload = await uploadOnCloudinary(resumeLocalPath);
 
+    if (!upload) {
+      throw new ApiError(400, "Resume upload failed");
+    }
+
+    resumeUrl = upload.secure_url;
+    resumePublicId = upload.public_id;
+  }
+
+    // Create user
     const user = await User.create({
         name: name.trim(),
-        email: email.toLowerCase().trim(), 
+        email: email.toLowerCase().trim(),
         password: hashedPassword,
         role,
-        resume: resumeUrl.url || "",
-        
-      
-    })
+        resume: resumeUrl || "",
+        resumePublicId: resumePublicId || "",
+    });
 
-    const createdUser = await User.findById(user._id).select(
-        "-password"
-    )
-
+    const createdUser = await User.findById(user._id).select("-password");
 
     if (!createdUser) {
-        throw new ApiError(500, "Something went wrong while registering the user")
+        throw new ApiError(500, "Something went wrong while registering user");
     }
 
     return res.status(201).json(
-        new ApiResponse(200, createdUser, "User registered Successfully")
-    )
-})
+        new ApiResponse(201, createdUser, "User registered successfully")
+    );
+
+});
 
 
 //get all users
@@ -113,6 +128,7 @@ const getAllUsers = asyncHandler(async(req, res)=>{
 const loginUser = asyncHandler(async (req, res) => {
 
     const { email, password } = req.body;
+    console.log("req.body:", req.body);
 
     if ([email, password].some((field) => field?.trim() === "")) {
         throw new ApiError(400, "Email and password required");
@@ -172,7 +188,7 @@ const logoutUser = asyncHandler(async (req, res) => {
 });
 
 
-//update
+//update profile
 
 const updateUser = asyncHandler(async(req, res)=>{
 
@@ -192,13 +208,56 @@ const updateUser = asyncHandler(async(req, res)=>{
     ).select("-password")
 
    
-    if(!updateUser){
-        throw new ApiError(500, "User cannot updated")
+    if(!updatedUser){
+        throw new ApiError(500, "User cannot be updated")
     }
 
     return res.status(200).json(
-        new ApiResponse(200, "User updated successfully", updateUser)
+        new ApiResponse(200, updatedUser, "User updated successfully")
     )
+});
+
+
+
+//update resume
+
+
+const updateResume = asyncHandler(async (req, res) => {
+
+    const userId = req.user.id;
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+        throw new ApiError(404, "User not found");
+    }
+
+    const resumeLocalPath = req.file?.path;
+
+    if (!resumeLocalPath) {
+        throw new ApiError(400, "Resume file required");
+    }
+
+    // delete old resume
+    if (user.resumePublicId) {
+        await deleteFromCloudinary(user.resumePublicId);
+    }
+
+    // upload new resume
+    const resumeUpload = await uploadOnCloudinary(resumeLocalPath);
+
+    if (!resumeUpload) {
+        throw new ApiError(400, "Resume upload failed");
+    }
+
+    user.resume = resumeUpload.secure_url;
+    user.resumePublicId = resumeUpload.public_id;
+
+    await user.save();
+
+    return res.status(200).json(
+        new ApiResponse(200, user, "Resume updated successfully")
+    );
 });
 
 
@@ -268,8 +327,30 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 
 
 
+//delete user
 
 
+ const deleteUser = asyncHandler(async (req, res) => {
+
+    const { id } = req.params;
+
+    const user = await User.findById(id);
+
+    if (!user) {
+        throw new ApiError(404, "User not found");
+    }
+
+    // delete resume from cloudinary
+    if (user.resumePublicId) {
+        await deleteFromCloudinary(user.resumePublicId);
+    }
+
+    await user.deleteOne();
+
+    return res.status(200).json(
+        new ApiResponse(200, {}, "User deleted successfully")
+    );
+});
 
 
 
@@ -291,40 +372,7 @@ export {registerUser,
      getCurrentUser,
      updateUser,
      changePassword,
+     deleteUser,
+    updateResume,
+    
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

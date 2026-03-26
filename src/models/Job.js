@@ -19,11 +19,15 @@ const jobSchema = new mongoose.Schema({
 
     location:{
         type:String,
+        required:true,
         index:true
     },
 
 
-    salary:Number,
+    salary:{
+        type:String,
+        default:"Not specified"
+    },
 
     postedBy:{
         type:mongoose.Schema.Types.ObjectId,

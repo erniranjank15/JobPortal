@@ -10,57 +10,78 @@ import ApiResponse from "../utils/ApiResponse.js"
 
 
 //Apply job
+  
+ const applyJob = asyncHandler(async (req, res) => {
+    
+    const userId = req.user.id; // ✅ from auth middleware
+    
+    console.log("USER:", userId);
 
-const applyJob = asyncHandler(async(req, res)=>{
+    const jobId = req.params.jobId; // ✅ from URL
+    console.log("JOB:", jobId);
 
-const {jobId} = req.body;
-
-
-//duplicate applications
-
-
-const existingApplication = await Application.findOne({job:jobId, applicant:req.user.id});
-     
-    if(existingApplication){
-        throw new ApiError(403, "You already applied for this job")
+    //  1. Validate jobId
+    if (!mongoose.Types.ObjectId.isValid(jobId)) {
+        throw new ApiError(400, "Invalid Job ID");
     }
 
-const application = await Application.create({
-    job:jobId,
-    applicant:req.user.id,
+    //  2. Check job exists
+    const job = await Job.findById(jobId);
+    if (!job) {
+        throw new ApiError(404, "Job not found");
+    }
 
-})
+    //  3. Prevent duplicate application
+    const existingApplication = await Application.findOne({
+        job: jobId,
+        applicant: userId,
+    });
 
-if(application){
-    return res.status(200).json(
-        new ApiResponse(201, "Application Submitted")
-    )
-}
-else{
-    throw new ApiError(501, "something went wrong while submitting application")
-}
+    if (existingApplication) {
+        throw new ApiError(409, "You already applied for this job");
+    }
 
+    //  4. Create application
+    const application = await Application.create({
+        job: jobId,
+        applicant: userId,
+    });
 
+    if (!application) {
+        throw new ApiError(500, "Failed to apply for job");
+    }
+
+    //  5. Send response
+    return res.status(201).json(
+        new ApiResponse(201, application, "Application submitted successfully")
+    );
 });
 
 
 
 
-
 //get all applications
+const getJobApplications = asyncHandler(async (req, res) => {
 
-const getJobApplications = asyncHandler(async(req,res)=>{
+    const { jobId } = req.params;
 
-    const applications = await Application.find({job: req.params.jobId}).populate('applicant', "name email");
-
-    if(!applications || applications.length === 0){
-        throw new ApiError(404, "No applications found for this job")
+    if (!jobId) {
+        throw new ApiError(400, "Job ID is required");
     }
 
-    return res.status(200).json(
-        new ApiResponse(200, applications,)
-    )
+    const applications = await Application.find({ job: jobId })
+        .populate("applicant", "name email")
+        .sort({ createdAt: -1 });
 
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            applications,
+            applications.length > 0
+                ? "Applications fetched successfully"
+                : "No applications found"
+        )
+    );
 });
 
 
@@ -87,27 +108,37 @@ const getUserApplications = asyncHandler(async(req,res)=>{
 
 // update application status
 
-const applicationStatus = asyncHandler(async(req,res)=>{
+const applicationStatus = asyncHandler(async (req, res) => {
+  const { status } = req.body;
+  const { applicationId} = req.params;
+   //console.log("appId:",applicationId);
 
-     const {status} = req.body;
+  if (!(applicationId)) {
+    return res.status(400).json({ message: "Invalid application ID" });
+  }
 
-     const application = await Application.findByIdAndUpdate(req.params.id, {status}, {new:true});
+  const application = await Application.findByIdAndUpdate(
+    applicationId,
+    { status },
+    { returnDocument: "after" }
+  );
 
-      if(!application){
-        throw new ApiError(404, "Application not found")
-    }
+  console.log("Updated Application:", application);
 
-    return res.status(200).json(
-        new ApiResponse(202, application, "Application status updated")
-    )
+  if (!application) {
+    throw new ApiError(404, "Application not found");
+  }
+
+  return res.status(200).json(
+    new ApiResponse(200, application, "Application status updated")
+  );
 });
 
 
 
 
-
-
-export{ applyJob,
+export{ 
+    applyJob,
    getJobApplications,
    getUserApplications,
    applicationStatus,

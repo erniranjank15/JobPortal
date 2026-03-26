@@ -8,51 +8,52 @@ import ApiResponse from "../utils/ApiResponse.js"
 
 
 //Create Job
+const createJob = asyncHandler(async (req, res) => {
 
-const createJob = asyncHandler(async(req,res)=>{
+    const role = req.user.role;
 
-    const {title, description, company, location, salary, postedBy} = req.body
-
-      if( [title, description, company, location, salary, postedBy].some((field) => field?.trim() === "")){
-        throw new ApiError(400, "All fields are required");
-       
-        
-        
-    const existingJob = await Job.findOne({
-           $or: [{ title },{location}]
-    })
-
-
-    if(existingJob){
-        throw new ApiError(409, "User with email or username already exists");
+    if(role !== "recruiter"){
+        throw new ApiError(403, "Only recruiters can create jobs")
     }
 
+     const { title, description, company, location, salary } = req.body;
+    
+
+    if ([title, description, company, location, salary].some((field) => field?.trim() === "")) {
+        throw new ApiError(400, "All fields are required");
+    }
+
+    const existingJob = await Job.findOne({
+        title: title.trim(),
+        company: company.trim(),
+        location: location.trim(),
+    });
+
+    if (existingJob) {
+        throw new ApiError(409, "Job already exists");
+    }
 
     const job = await Job.create({
-       title,
-       description,
-       company,
-       location,
-       salary,
-       postedBy: req.user.id,     
-    })
-    
+        title,
+        description,
+        company,
+        location,
+        salary,
+        postedBy: req.user._id
+    });
 
-    
-       const createdJob = await User.findById(job._id)
+    const createdJob = await Job.findById(job._id);
 
-
-       if (!createdJob) {
-        throw new ApiError(500, "Something went wrong while creating the job")
+    if (!createdJob) {
+        throw new ApiError(500, "Something went wrong while creating the job");
     }
 
-     return res.status(201).json(
-             new ApiResponse(200, createdJob, "Job created Successfully")
-         )
-    
-    }
-})
+    return res.status(201).json(
+        new ApiResponse(201, createdJob, "Job created Successfully")
+    );
 
+}
+);
 
 
 //get all jobs 
@@ -108,42 +109,42 @@ const updateJob = asyncHandler(async(req,res)=>{
 
 //Delete job
 
-const deleteJob = asyncHandler(async(req,res)=>{
+const deleteJob = asyncHandler(async (req, res) => {
 
-    try{
-    const deleted = await Job.findByIdAndDelete(req.params.id)
-    console.log(deleted);
-    
-    return new ApiResponse(204, "Job deleted");
+    const deleted = await Job.findByIdAndDelete(req.params.id);
 
-    }
-    catch{
-     
-        throw new ApiError(504, "something went wrong while deleteing job")
-
+    if (!deleted) {
+        throw new ApiError(404, "Job not found");
     }
 
-
+    return res.status(200).json(
+        new ApiResponse(200, null, "Job deleted successfully")
+    );
 });
 
 
 
 //search jobs
 
-const searchJob = asyncHandler(async(req,res)=>{
+const searchJob = asyncHandler(async (req, res) => {
     const keyword = req.query.keyword || "";
 
     const jobs = await Job.find({
-        title:{$regex:keyword, $options: "i"}
-    })
+        $or: [
+            { title: { $regex: keyword, $options: "i" } },
+            { company: { $regex: keyword, $options: "i" } },
+            { location: { $regex: keyword, $options: "i" } },
+            { description: { $regex: keyword, $options: "i" } }
+        ]
+    });
 
-    if(!jobs){
-        return new ApiError(404, "Job not found")
+    if (jobs.length === 0) {
+        throw new ApiError(404, "No jobs found");
     }
 
     return res.status(200).json(
         new ApiResponse(200, jobs)
-    )
+    );
 });
 
 

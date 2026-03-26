@@ -1,7 +1,6 @@
-import express, { json } from 'express'
+import express from 'express'
 import cors from "cors"
 import cookieParser from "cookie-parser"
-import mongoose from 'mongoose';
 
 import userRoutes from "./routes/userRoutes.js"
 import jobRoutes from "./routes/jobRoutes.js"
