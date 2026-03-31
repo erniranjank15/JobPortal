@@ -16,11 +16,37 @@ const createJob = asyncHandler(async (req, res) => {
         throw new ApiError(403, "Only recruiters can create jobs")
     }
 
-     const { title, description, company, location, salary } = req.body;
-    
+     const { title, description, company, location, jobType, skills, salary } = req.body;
 
-    if ([title, description, company, location, salary].some((field) => field?.trim() === "")) {
-        throw new ApiError(400, "All fields are required");
+    const requiredTextFields = [title, description, company, location];
+    if (requiredTextFields.some((field) => typeof field !== "string" || field.trim() === "")) {
+        throw new ApiError(400, "Title, description, company, and location are required and must be non-empty strings");
+    }
+
+    if (jobType !== undefined && jobType !== null && (typeof jobType !== "string" || jobType.trim() === "")) {
+        throw new ApiError(400, "jobType must be a non-empty string when provided");
+    }
+
+    let skillsArray;
+    if (typeof skills === "string") {
+        skillsArray = skills
+            .split(",")
+            .map((skill) => skill.trim())
+            .filter(Boolean);
+    } else if (Array.isArray(skills)) {
+        skillsArray = skills
+            .map((skill) => (typeof skill === "string" ? skill.trim() : ""))
+            .filter(Boolean);
+    } else {
+        throw new ApiError(400, "Skills must be provided as a comma-separated string or non-empty array of strings");
+    }
+
+    if (skillsArray.length === 0) {
+        throw new ApiError(400, "Skills must be a non-empty array of non-empty strings");
+    }
+
+    if (salary !== undefined && salary !== null && typeof salary !== "string") {
+        throw new ApiError(400, "Salary must be a string when provided");
     }
 
     const existingJob = await Job.findOne({
@@ -38,6 +64,8 @@ const createJob = asyncHandler(async (req, res) => {
         description,
         company,
         location,
+        jobType,
+        skills: skillsArray,
         salary,
         postedBy: req.user._id
     });
@@ -94,7 +122,30 @@ const getAllJobs = asyncHandler(async(req, res)=>{
 
 const updateJob = asyncHandler(async(req,res)=>{
 
-    const job = await Job.findByIdAndUpdate(req.params.id, req.body, {new:true})
+    const updateData = { ...req.body };
+
+    if (updateData.skills !== undefined) {
+        const { skills } = updateData;
+
+        if (typeof skills === "string") {
+            updateData.skills = skills
+                .split(",")
+                .map((skill) => skill.trim())
+                .filter(Boolean);
+        } else if (Array.isArray(skills)) {
+            updateData.skills = skills
+                .map((skill) => (typeof skill === "string" ? skill.trim() : ""))
+                .filter(Boolean);
+        } else {
+            throw new ApiError(400, "Skills must be a comma-separated string or array of strings");
+        }
+
+        if (updateData.skills.length === 0) {
+            throw new ApiError(400, "Skills must include at least one valid skill");
+        }
+    }
+
+    const job = await Job.findByIdAndUpdate(req.params.id, updateData, {new:true})
 
     if(!job){
         throw new ApiError(503, "Job is not updated")
