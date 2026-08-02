@@ -70,7 +70,7 @@ const getJobApplications = asyncHandler(async (req, res) => {
     }
 
     const applications = await Application.find({ job: jobId })
-        .populate("applicant", "name email")
+        .populate("applicant", "name email resume")
         .sort({ createdAt: -1 });
 
     return res.status(200).json(
