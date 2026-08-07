@@ -6,7 +6,8 @@ import {asyncHandler} from "../utils/asyncHandler.js"
 import ApiError from "../utils/ApiError.js"
 import ApiResponse from "../utils/ApiResponse.js"
 import { uploadOnCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js" 
-
+import { sendEmail } from "../services/emailService.js";
+import { welcomeEmail } from "../templates/welcomeEmail.js";
 
 
 
@@ -93,11 +94,22 @@ const registerUser = asyncHandler(async (req, res) => {
         resumePublicId: resumePublicId || "",
     });
 
+    console.log(user);
     const createdUser = await User.findById(user._id).select("-password");
 
     if (!createdUser) {
         throw new ApiError(500, "Something went wrong while registering user");
     }
+
+
+
+await sendEmail({
+  to: createdUser.email,
+  subject: "Welcome to Job Portal",
+  html: welcomeEmail(createdUser.name),
+});
+
+
 
     return res.status(201).json(
         new ApiResponse(201, createdUser, "User registered successfully")
