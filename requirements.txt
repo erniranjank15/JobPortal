@@ -6,3 +6,4 @@ express
 mongoose
 multer
 nodemon
+nodemailer
