@@ -1,18 +1,35 @@
-import transporter from "../config/mail.js";
+
+import { BrevoClient } from "@getbrevo/brevo";
+
+const brevo = new BrevoClient({
+  apiKey: process.env.BREVO_API_KEY,
+});
 
 export const sendEmail = async ({ to, subject, html }) => {
   try {
-    console.log("To:", to);
+    console.log("Sending email to:", to);
 
-    const info = await transporter.sendMail({
-      from: `"Job Portal" <${process.env.EMAIL_USER}>`,
-      to,
-      subject,
-      html,
+    const response = await brevo.transactionalEmails.sendTransacEmail({
+      sender: {
+        name: "Job Portal",
+        email: process.env.BREVO_SENDER_EMAIL,
+      },
+
+      to: [
+        {
+          email: to,
+        },
+      ],
+
+      subject: subject,
+      htmlContent: html,
     });
 
-    console.log(info.messageId);
+    console.log("Email sent successfully:", response);
+
+    return response;
   } catch (error) {
-    console.error("Email Error:", error);
+    console.error("Brevo Email Error:", error);
+    throw error;
   }
-};
+}
