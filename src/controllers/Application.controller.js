@@ -1,78 +1,167 @@
-import jwt from "jsonwebtoken"
+import mongoose from "mongoose";
+import { Job } from "../models/Job.js"
+import { User } from "../models/User.js"
+import { Application } from "../models/Application.js"
 import { asyncHandler } from "../utils/asyncHandler.js"
-import ApiError from "../utils/ApiError.js";
-import ApiResponse from "../utils/ApiResponse.js";
+import ApiError from "../utils/ApiError.js"
+import ApiResponse from "../utils/ApiResponse.js"
 
-//Authentication Middleware
-export const authMiddleware = asyncHandler(async (req, res, next) => {
-    const token = req.cookies?.token;
 
-    if (!token) {
-        throw new ApiError(401, "Unauthorized request");
+
+
+//Apply job
+
+const applyJob = asyncHandler(async (req, res) => {
+
+    const userId = req.user.id; // ✅ from auth middleware
+
+    console.log("USER:", userId);
+
+    const jobId = req.params.jobId; // ✅ from URL
+    console.log("JOB:", jobId);
+
+    //  1. Validate jobId
+    if (!mongoose.Types.ObjectId.isValid(jobId)) {
+        throw new ApiError(400, "Invalid Job ID");
     }
 
-    const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-    req.user = {
-        ...decodedToken,
-        _id: decodedToken.id
-    };
-    next();
+    //  2. Check job exists
+    const job = await Job.findById(jobId);
+    if (!job) {
+        throw new ApiError(404, "Job not found");
+    }
+
+    //  3. Prevent duplicate application
+    const existingApplication = await Application.findOne({
+        job: jobId,
+        applicant: userId,
+    });
+
+    if (existingApplication) {
+        throw new ApiError(409, "You already applied for this job");
+    }
+
+    //  4. Create application
+    const application = await Application.create({
+        job: jobId,
+        applicant: userId,
+    });
+
+    if (!application) {
+        throw new ApiError(500, "Failed to apply for job");
+    }
+
+    //  5. Send response
+    return res.status(201).json(
+        new ApiResponse(201, application, "Application submitted successfully")
+    );
 });
 
 
 
 
+//get all applications
+const getJobApplications = asyncHandler(async (req, res) => {
 
-//Role authorization middleware
-export const authorizeRoles = (...roles) => {
-    return (req, res, next) => {
-        if (!roles.includes(req.user.role)) {
-            throw new ApiError(403, "Access denied");
-        }
-        next();
-    };
-};
+    const { jobId } = req.params;
+
+    if (!jobId) {
+        throw new ApiError(400, "Job ID is required");
+    }
+
+    const job = await Job.findById(jobId);
+    if (!job) {
+        throw new ApiError(404, "Job not found");
+    }
+
+    // Authorization check
+    if (req.user.role === "recruiter" && job.postedBy?.toString() !== req.user.id.toString()) {
+        throw new ApiError(403, "Access denied. You can only view applications for your own jobs.");
+    }
+
+    if (req.user.role === "applicant") {
+        throw new ApiError(403, "Access denied. Applicants cannot view job applications.");
+    }
+
+    const applications = await Application.find({ job: jobId })
+        .populate("applicant", "name email resume")
+        .sort({ createdAt: -1 });
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            applications,
+            applications.length > 0
+                ? "Applications fetched successfully"
+                : "No applications found"
+        )
+    );
+});
 
 
 
 
+//get user application
+
+const getUserApplications = asyncHandler(async (req, res) => {
+
+    const applications = await Application.find({ applicant: req.user.id }).populate("job");
+
+
+    if (!applications || applications.length === 0) {
+        throw new ApiError(404, "No applications found")
+    }
+
+    return res.status(200).json(
+        new ApiResponse(200, applications,)
+    )
+});
 
 
 
 
+// update application status
+
+const applicationStatus = asyncHandler(async (req, res) => {
+    const { status } = req.body;
+    const { applicationId } = req.params;
+
+    if (!(applicationId)) {
+        return res.status(400).json({ message: "Invalid application ID" });
+    }
+
+    const application = await Application.findById(applicationId).populate("job");
+
+    if (!application) {
+        throw new ApiError(404, "Application not found");
+    }
+
+    // Authorization check
+    if (req.user.role === "recruiter" && application.job?.postedBy?.toString() !== req.user.id.toString()) {
+        throw new ApiError(403, "Access denied. You can only update application status for your own jobs.");
+    }
+
+    if (req.user.role === "applicant") {
+        throw new ApiError(403, "Access denied.");
+    }
+
+    application.status = status;
+    const updatedApplication = await application.save();
+
+    console.log("Updated Application:", updatedApplication);
+
+    return res.status(200).json(
+        new ApiResponse(200, updatedApplication, "Application status updated")
+    );
+});
 
 
 
 
+export {
+    applyJob,
+    getJobApplications,
+    getUserApplications,
+    applicationStatus,
 
-
-// import ApiError  from "../utils/ApiError.js";
-// import { asyncHandler } from "../utils/asyncHandler.js";
-// import jwt from "jsonwebtoken"
-// import  User  from "../models/User.js";
-
-// export const verifyJWT = asyncHandler(async(req, _, next) => {
-//     try {
-//         const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "")
-        
-//         // console.log(token);
-//         if (!token) {
-//             throw new ApiError(401, "Unauthorized request")
-//         }
-    
-//         const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET)
-    
-//         const user = await User.findById(decodedToken?._id).select("-password")
-    
-//         if (!user) {
-            
-//             throw new ApiError(401, "Invalid Access Token")
-//         }
-    
-//         req.user = user;
-//         next()
-//     } catch (error) {
-//         throw new ApiError(401, error?.message || "Invalid access token")
-//     }
-    
-// })
+}
