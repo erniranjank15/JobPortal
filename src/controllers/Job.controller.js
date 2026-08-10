@@ -145,9 +145,18 @@ const updateJob = asyncHandler(async(req,res)=>{
         }
     }
 
-    const job = await Job.findByIdAndUpdate(req.params.id, updateData, {new:true})
+    const job = await Job.findById(req.params.id);
+    if (!job) {
+        throw new ApiError(404, "Job not found");
+    }
 
-    if(!job){
+    if (job.postedBy?.toString() !== req.user.id.toString() && req.user.role !== "admin") {
+        throw new ApiError(403, "Access denied. You can only update your own jobs.");
+    }
+
+    const updatedJob = await Job.findByIdAndUpdate(req.params.id, updateData, { new: true });
+
+    if(!updatedJob){
         throw new ApiError(503, "Job is not updated")
     }
 
@@ -161,12 +170,16 @@ const updateJob = asyncHandler(async(req,res)=>{
 //Delete job
 
 const deleteJob = asyncHandler(async (req, res) => {
-
-    const deleted = await Job.findByIdAndDelete(req.params.id);
-
-    if (!deleted) {
+    const job = await Job.findById(req.params.id);
+    if (!job) {
         throw new ApiError(404, "Job not found");
     }
+
+    if (job.postedBy?.toString() !== req.user.id.toString() && req.user.role !== "admin") {
+        throw new ApiError(403, "Access denied. You can only delete your own jobs.");
+    }
+
+    await job.deleteOne();
 
     return res.status(200).json(
         new ApiResponse(200, null, "Job deleted successfully")
