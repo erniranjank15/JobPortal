@@ -1,11 +1,11 @@
 
-import {User} from "../models/User.js"
+import { User } from "../models/User.js"
 import bcrypt from "bcrypt"
 import jwt from 'jsonwebtoken'
-import {asyncHandler} from "../utils/asyncHandler.js"
+import { asyncHandler } from "../utils/asyncHandler.js"
 import ApiError from "../utils/ApiError.js"
 import ApiResponse from "../utils/ApiResponse.js"
-import { uploadOnCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js" 
+import { uploadOnCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js"
 import { sendEmail } from "../services/emailService.js";
 import { welcomeEmail } from "../templates/welcomeEmail.js";
 
@@ -31,14 +31,14 @@ const registerUser = asyncHandler(async (req, res) => {
 
 
     //Check Admin registration only one admin can be register
-    
+
     const isAdminExists = await User.findOne({ role: "admin" });
 
     if (role === "admin" && isAdminExists) {
         throw new ApiError(400, "An admin user already exists");
     }
 
-    
+
     // Password validation
     if (password.length < 10) {
         throw new ApiError(400, "Password must be at most 10 characters long");
@@ -56,33 +56,33 @@ const registerUser = asyncHandler(async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    
 
 
 
-  // Resume upload
 
-  // Resume upload only for applicant
-// Resume Upload
-  let resumeUrl = "";
-  let resumePublicId = null;
+    // Resume upload
+
+    // Resume upload only for applicant
+    // Resume Upload
+    let resumeUrl = "";
+    let resumePublicId = null;
 
     if (role === "applicant") {
-    const resumeLocalPath = req.files?.resume?.[0]?.path;
+        const resumeLocalPath = req.files?.resume?.[0]?.path;
 
-    if (!resumeLocalPath) {
-      throw new ApiError(400, "Resume is required");
+        if (!resumeLocalPath) {
+            throw new ApiError(400, "Resume is required");
+        }
+
+        const upload = await uploadOnCloudinary(resumeLocalPath);
+
+        if (!upload) {
+            throw new ApiError(400, "Resume upload failed");
+        }
+
+        resumeUrl = upload.secure_url;
+        resumePublicId = upload.public_id;
     }
-
-    const upload = await uploadOnCloudinary(resumeLocalPath);
-
-    if (!upload) {
-      throw new ApiError(400, "Resume upload failed");
-    }
-
-    resumeUrl = upload.secure_url;
-    resumePublicId = upload.public_id;
-  }
 
     // Create user
     const user = await User.create({
@@ -101,13 +101,17 @@ const registerUser = asyncHandler(async (req, res) => {
         throw new ApiError(500, "Something went wrong while registering user");
     }
 
+    console.log("Sending welcome email to:", createdUser.email);
 
-
-await sendEmail({
-  to: createdUser.email,
-  subject: "Welcome to Job Portal",
-  html: welcomeEmail(createdUser.name),
-});
+    try {
+        await sendEmail({
+            to: createdUser.email,
+            subject: "Welcome to Job Portal",
+            html: welcomeEmail(createdUser.name),
+        });
+    } catch (emailError) {
+        console.error("Welcome email failed to send:", emailError);
+    }
 
 
 
@@ -120,15 +124,15 @@ await sendEmail({
 
 //get all users
 
-const getAllUsers = asyncHandler(async(req, res)=>{
+const getAllUsers = asyncHandler(async (req, res) => {
     const users = await User.find().select("-password");
 
-    if(users){
+    if (users) {
         return res.status(200).json(
             new ApiResponse(200, users, "Users fetched successfully")
         )
     }
-    else{
+    else {
         throw new ApiError(404, "Users not found")
     }
 });
@@ -204,25 +208,26 @@ const logoutUser = asyncHandler(async (req, res) => {
 
 //update profile
 
-const updateUser = asyncHandler(async(req, res)=>{
+const updateUser = asyncHandler(async (req, res) => {
 
     const userId = req.user.id;
 
-    const {name, email} = req.body;
+    const { name, email } = req.body;
 
-     const updatedUser= await User.findByIdAndUpdate(userId,
+    const updatedUser = await User.findByIdAndUpdate(userId,
         {
-            $set:{name,
-                email:email
+            $set: {
+                name,
+                email: email
             }
         },
         {
-            new:true
+            new: true
         }
     ).select("-password")
 
-   
-    if(!updatedUser){
+
+    if (!updatedUser) {
         throw new ApiError(500, "User cannot be updated")
     }
 
@@ -279,29 +284,29 @@ const updateResume = asyncHandler(async (req, res) => {
 //change passward
 
 
-const changePassword = asyncHandler(async(req,res)=>{
+const changePassword = asyncHandler(async (req, res) => {
 
     const userId = req.user.id;
 
-    const {oldPassword, newPassword} = req.body;
+    const { oldPassword, newPassword } = req.body;
 
     const user = await User.findById(userId);
 
     const isMatch = await bcrypt.compare(oldPassword, user.password);
 
-    if(!isMatch){
+    if (!isMatch) {
         throw new ApiError(400, "Old password is incorrect");
     }
 
 
-      if(newPassword.length < 10){
+    if (newPassword.length < 10) {
         throw new ApiError(400, " New Password must be at least 10 characters long")
     }
-    
+
     const salt = await bcrypt.genSalt(10)
     const hashedPassword = await bcrypt.hash(newPassword, salt);
-    
-    
+
+
     user.password = hashedPassword;
 
     await user.save();
@@ -309,7 +314,7 @@ const changePassword = asyncHandler(async(req,res)=>{
     return res.status(200).json(
         new ApiResponse(200, "Password changed successfully")
     )
-         
+
 
 });
 
@@ -344,7 +349,7 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 //delete user
 
 
- const deleteUser = asyncHandler(async (req, res) => {
+const deleteUser = asyncHandler(async (req, res) => {
 
     const { id } = req.params;
 
@@ -379,14 +384,15 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 
 
 
-export {registerUser,
+export {
+    registerUser,
     getAllUsers,
-     loginUser,
-     logoutUser,
-     getCurrentUser,
-     updateUser,
-     changePassword,
-     deleteUser,
+    loginUser,
+    logoutUser,
+    getCurrentUser,
+    updateUser,
+    changePassword,
+    deleteUser,
     updateResume,
-    
+
 }
