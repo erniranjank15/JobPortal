@@ -56,12 +56,20 @@ const applyJob = asyncHandler(async (req, res) => {
 
 
 
-   try {
-        await sendEmail({
-            to: applicant.User.email,
-            subject: "Application Submitted Successfully",
-            html: applicationSubmittedEmail(applicant.User.name, job.Job.title, job.Job.company, application.createdAt),
-        });
+    try {
+        const applicantUser = await User.findById(userId);
+        if (applicantUser) {
+            await sendEmail({
+                to: applicantUser.email,
+                subject: "Application Submitted Successfully",
+                html: applicationSubmittedEmail(
+                    applicantUser.name,
+                    job.title,
+                    job.company,
+                    application.createdAt
+                ),
+            });
+        }
     } catch (emailError) {
         console.error("Application submission email failed to send:", emailError);
     }
@@ -125,13 +133,9 @@ const getUserApplications = asyncHandler(async (req, res) => {
     const applications = await Application.find({ applicant: req.user.id }).populate("job");
 
 
-    if (!applications || applications.length === 0) {
-        throw new ApiError(404, "No applications found")
-    }
-
     return res.status(200).json(
-        new ApiResponse(200, applications,)
-    )
+        new ApiResponse(200, applications || [], "User applications fetched successfully")
+    );
 });
 
 
@@ -147,7 +151,7 @@ const applicationStatus = asyncHandler(async (req, res) => {
         return res.status(400).json({ message: "Invalid application ID" });
     }
 
-    const application = await Application.findById(applicationId).populate("job");
+    const application = await Application.findById(applicationId).populate("job").populate("applicant");
 
     if (!application) {
         throw new ApiError(404, "Application not found");
@@ -162,21 +166,26 @@ const applicationStatus = asyncHandler(async (req, res) => {
         throw new ApiError(403, "Access denied.");
     }
 
+    const oldStatus = application.status;
     application.status = status;
     const updatedApplication = await application.save();
 
     console.log("Updated Application:", updatedApplication);
 
-
-
-
-
-   try {
-        await sendEmail({
-            to: applicant.User.email,
-            subject: "Application Status Updated",
-            html: applicationStatusEmail(applicant.User.name, job.Job.title, job.Job.company, application.status, status),
-        });
+    try {
+        if (application.applicant) {
+            await sendEmail({
+                to: application.applicant.email,
+                subject: "Application Status Updated",
+                html: applicationStatusEmail(
+                    application.applicant.name,
+                    application.job.title,
+                    application.job.company,
+                    oldStatus,
+                    status
+                ),
+            });
+        }
     } catch (emailError) {
         console.error("Application status update email failed to send:", emailError);
     }
