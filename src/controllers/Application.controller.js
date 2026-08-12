@@ -5,8 +5,9 @@ import { Application } from "../models/Application.js"
 import { asyncHandler } from "../utils/asyncHandler.js"
 import ApiError from "../utils/ApiError.js"
 import ApiResponse from "../utils/ApiResponse.js"
-
-
+import { sendEmail } from "../services/emailService.js";
+import { applicationSubmittedEmail } from "../templates/jobApplnSubmitted.js";
+import { applicationStatusEmail } from "../templates/applicationStatusEmail.js";
 
 
 //Apply job
@@ -50,6 +51,22 @@ const applyJob = asyncHandler(async (req, res) => {
     if (!application) {
         throw new ApiError(500, "Failed to apply for job");
     }
+
+
+
+
+
+   try {
+        await sendEmail({
+            to: applicant.User.email,
+            subject: "Application Submitted Successfully",
+            html: applicationSubmittedEmail(applicant.User.name, job.Job.title, job.Job.company, application.createdAt),
+        });
+    } catch (emailError) {
+        console.error("Application submission email failed to send:", emailError);
+    }
+
+
 
     //  5. Send response
     return res.status(201).json(
@@ -149,6 +166,26 @@ const applicationStatus = asyncHandler(async (req, res) => {
     const updatedApplication = await application.save();
 
     console.log("Updated Application:", updatedApplication);
+
+
+
+
+
+   try {
+        await sendEmail({
+            to: applicant.User.email,
+            subject: "Application Status Updated",
+            html: applicationStatusEmail(applicant.User.name, job.Job.title, job.Job.company, application.status, status),
+        });
+    } catch (emailError) {
+        console.error("Application status update email failed to send:", emailError);
+    }
+
+
+
+
+
+
 
     return res.status(200).json(
         new ApiResponse(200, updatedApplication, "Application status updated")
