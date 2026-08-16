@@ -2,12 +2,20 @@
 import { User } from "../models/User.js"
 import bcrypt from "bcrypt"
 import jwt from 'jsonwebtoken'
+<<<<<<< HEAD
+import crypto from "crypto"
+=======
+>>>>>>> fd08176a88324cdcb4605da3b52d5af6e9873268
 import { asyncHandler } from "../utils/asyncHandler.js"
 import ApiError from "../utils/ApiError.js"
 import ApiResponse from "../utils/ApiResponse.js"
 import { uploadOnCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js"
 import { sendEmail } from "../services/emailService.js";
 import { welcomeEmail } from "../templates/welcomeEmail.js";
+<<<<<<< HEAD
+import { passwordResetEmail } from "../templates/passwordResetEmail.js";
+=======
+>>>>>>> fd08176a88324cdcb4605da3b52d5af6e9873268
 
 
 
@@ -384,6 +392,103 @@ const deleteUser = asyncHandler(async (req, res) => {
 
 
 
+
+// Forgot Password
+const forgotPassword = asyncHandler(async (req, res) => {
+    const { email } = req.body;
+
+    if (!email || email.trim() === "") {
+        throw new ApiError(400, "Email is required");
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+
+    if (!user) {
+        // We don't reveal if user exists or not for security
+        return res.status(200).json(
+            new ApiResponse(200, {}, "If the email exists, a password reset link has been sent")
+        );
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    
+    // Hash token and save to database
+    const hashedToken = crypto.createHash("sha256").update(resetToken).digest("hex");
+    
+    user.resetPasswordToken = hashedToken;
+    user.resetPasswordExpire = Date.now() + 15 * 60 * 1000; // 15 minutes
+    
+    await user.save({ validateBeforeSave: false });
+
+    // Create reset URL
+    const resetUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/reset-password/${resetToken}`;
+
+    try {
+        await sendEmail({
+            to: user.email,
+            subject: "Password Reset Request - Job Portal",
+            html: passwordResetEmail(user.name, resetUrl),
+        });
+
+        return res.status(200).json(
+            new ApiResponse(200, {}, "If the email exists, a password reset link has been sent")
+        );
+    } catch (error) {
+        user.resetPasswordToken = undefined;
+        user.resetPasswordExpire = undefined;
+        await user.save({ validateBeforeSave: false });
+        
+        console.error("Password reset email error:", error);
+        throw new ApiError(500, "Email could not be sent. Please try again later.");
+    }
+});
+
+// Reset Password
+const resetPassword = asyncHandler(async (req, res) => {
+    const { token } = req.params;
+    const { password, confirmPassword } = req.body;
+
+    if (!password || !confirmPassword) {
+        throw new ApiError(400, "Password and confirm password are required");
+    }
+
+    if (password !== confirmPassword) {
+        throw new ApiError(400, "Passwords do not match");
+    }
+
+    if (password.length < 10) {
+        throw new ApiError(400, "Password must be at least 10 characters long");
+    }
+
+    // Hash the token to compare with stored hash
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+
+    const user = await User.findOne({
+        resetPasswordToken: hashedToken,
+        resetPasswordExpire: { $gt: Date.now() }
+    });
+
+    if (!user) {
+        throw new ApiError(400, "Invalid or expired reset token");
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    user.password = hashedPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+
+    await user.save();
+
+    return res.status(200).json(
+        new ApiResponse(200, {}, "Password has been reset successfully")
+    );
+});
+
+
 export {
     registerUser,
     getAllUsers,
@@ -394,5 +499,6 @@ export {
     changePassword,
     deleteUser,
     updateResume,
-
+    forgotPassword,
+    resetPassword
 }
