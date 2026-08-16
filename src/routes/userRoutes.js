@@ -9,6 +9,8 @@ import {registerUser,
      getAllUsers,
      updateResume,
      deleteUser,
+     forgotPassword,
+     resetPassword
       
      
 } from "../controllers/User.controller.js"
@@ -34,7 +36,9 @@ router.patch(
     updateResume
 );
 
-
+// Forgot Password & Reset Password
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password/:token", resetPassword);
 
 
 //Admin
