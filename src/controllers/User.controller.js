@@ -2,20 +2,18 @@
 import { User } from "../models/User.js"
 import bcrypt from "bcrypt"
 import jwt from 'jsonwebtoken'
-<<<<<<< HEAD
+
 import crypto from "crypto"
-=======
->>>>>>> fd08176a88324cdcb4605da3b52d5af6e9873268
+
 import { asyncHandler } from "../utils/asyncHandler.js"
 import ApiError from "../utils/ApiError.js"
 import ApiResponse from "../utils/ApiResponse.js"
 import { uploadOnCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js"
 import { sendEmail } from "../services/emailService.js";
 import { welcomeEmail } from "../templates/welcomeEmail.js";
-<<<<<<< HEAD
+
 import { passwordResetEmail } from "../templates/passwordResetEmail.js";
-=======
->>>>>>> fd08176a88324cdcb4605da3b52d5af6e9873268
+
 
 
 
