@@ -12,8 +12,23 @@ const app = express();
 
 
 //Middleware
+const allowedOrigins = [
+    "https://jobportalnk.netlify.app",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:3000",
+    ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",").map(o => o.trim()) : [])
+].filter(Boolean);
+
 app.use(cors({
-    origin: process.env.CORS_ORIGIN,
+    origin: function (origin, callback) {
+        // allow requests with no origin (like mobile apps, curl, postman)
+        if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
+            callback(null, true);
+        } else {
+            callback(new Error("Not allowed by CORS"));
+        }
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],

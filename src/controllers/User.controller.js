@@ -47,7 +47,7 @@ const registerUser = asyncHandler(async (req, res) => {
 
     // Password validation
     if (password.length < 10) {
-        throw new ApiError(400, "Password must be at most 10 characters long");
+        throw new ApiError(400, "Password must be at least 10 characters long");
     }
 
     // Role validation
