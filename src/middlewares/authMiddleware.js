@@ -5,7 +5,7 @@ import ApiResponse from "../utils/ApiResponse.js";
 
 //Authentication Middleware
 export const authMiddleware = asyncHandler(async (req, res, next) => {
-    const token = req.cookies?.token;
+    const token = req.cookies?.token || req.header("Authorization")?.replace("Bearer ", "");
 
     if (!token) {
         throw new ApiError(401, "Unauthorized request");
@@ -14,7 +14,8 @@ export const authMiddleware = asyncHandler(async (req, res, next) => {
     const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
     req.user = {
         ...decodedToken,
-        _id: decodedToken.id
+        _id: decodedToken.id,
+        id: decodedToken.id
     };
     next();
 });

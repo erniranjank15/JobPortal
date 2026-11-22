@@ -174,7 +174,8 @@ const loginUser = asyncHandler(async (req, res) => {
         { expiresIn: process.env.ACCESS_TOKEN_EXPIRY }
     );
 
-    const loggedInUser = await User.findById(user._id).select("-password");
+    const loggedInUser = await User.findById(user._id).select("-password").lean();
+    loggedInUser.token = token;
 
     const options = {
         httpOnly: true,
