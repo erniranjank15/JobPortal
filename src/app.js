@@ -46,9 +46,17 @@ app.use("/api/v1/jobs", jobRoutes);
 app.use("/api/v1/applications", applicationRoutes);
 
 
-//Test
+//Test & Keep-alive
 app.get("/",(req,res)=>{
     res.send("Job Portal API running")
+})
+
+app.get("/health", (req, res) => {
+    res.status(200).json({ status: "active", message: "Server is awake", timestamp: new Date().toISOString() });
+})
+
+app.get("/ping", (req, res) => {
+    res.status(200).send("pong");
 })
 
 
