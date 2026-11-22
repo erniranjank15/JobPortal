@@ -422,6 +422,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
 
     // Create reset URL
     const resetUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/reset-password/${resetToken}`;
+    console.log(`🔑 [PASSWORD RESET URL] for ${user.email}: ${resetUrl}`);
 
     try {
         await sendEmail({
@@ -439,7 +440,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
         await user.save({ validateBeforeSave: false });
         
         console.error("Password reset email error:", error);
-        throw new ApiError(500, "Email could not be sent. Please try again later.");
+        throw new ApiError(500, `Email delivery failed: ${error?.message || "Please check email configuration"}`);
     }
 });
 
